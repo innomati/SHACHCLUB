@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Set up chess puzzles, solve them with legal moves, comment each move and send your solution.">
+<meta name="theme-color" content="#2350d6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Chess Puzzles">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Chess Puzzle Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a calm club-room tool — precise, quiet, nothing in the way of the board.
+   IDEA: a tournament board beside a scoresheet: you set up, you play, you write it down.
+   PICTURE: the wooden board itself, large at the top; the scoresheet table runs below it.
+   COLOUR and TYPE: white ground, ink black, maple and walnut squares, one cobalt accent; Barlow Condensed titles, Barlow text.
+   LAYOUT: board left with its control panel right; the full-width scoresheet and export beneath; all stacked on phones. */
+:root{color-scheme:light dark;
+--bg:light-dark(#ffffff,#131313);--ink:light-dark(#161616,#ececec);--mute:light-dark(#5d5d5d,#a3a3a3);
+--line:light-dark(#e2e2e0,#2c2c2c);--panel:light-dark(#f5f5f3,#1c1c1c);--field:light-dark(#ffffff,#121212);
+--acc:light-dark(#2350d6,#7f9cff);--accInk:light-dark(#ffffff,#0e1530);--bad:light-dark(#c0271b,#ff7b6e);
+--lt:#efd8b4;--dk:#b4855e}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Barlow,system-ui,sans-serif;overflow-x:clip}
+h1,h2{font-family:"Barlow Condensed",Barlow,sans-serif;font-weight:700;line-height:1.05;margin:0;text-wrap:balance}
+h1{font-size:clamp(32px,4.4vw,46px)}h2{font-size:26px}
+.band{padding:clamp(20px,3vw,40px) max(4vw,16px);max-width:1240px;margin:0 auto}
+.lede{color:var(--mute);margin:6px 0 0;max-width:68ch}
+.top{display:grid;grid-template-columns:minmax(0,620px) minmax(270px,1fr);gap:clamp(20px,3vw,40px);align-items:start;margin-top:20px}
+@media(max-width:880px){.top{grid-template-columns:minmax(0,1fr)}}
+.boardwrap{position:relative;width:100%;max-width:620px;container-type:inline-size;border-radius:6px;box-shadow:0 1px 0 rgba(0,0,0,.08),0 14px 36px -14px rgba(0,0,0,.45)}
+.board{display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;border-radius:6px;overflow:hidden;user-select:none;-webkit-user-select:none}
+.sq{touch-action:none;-webkit-tap-highlight-color:transparent;position:relative;border:0;padding:0;margin:0;display:grid;place-items:center;cursor:pointer;font:inherit;color:inherit;aspect-ratio:1}
+.sq.lt{background:var(--lt)}.sq.dk{background:var(--dk)}
+.sq:focus-visible{outline:3px solid var(--acc);outline-offset:-3px;z-index:2}
+.sq.last::after{content:"";position:absolute;inset:0;background:rgba(255,206,40,.42)}
+.sq.sel::after{content:"";position:absolute;inset:0;background:rgba(35,80,214,.42)}
+.sq.chk{background:radial-gradient(circle,#ff3b2f 0,#e0261b 38%,transparent 72%),var(--dk)}
+.sq.lt.chk{background:radial-gradient(circle,#ff3b2f 0,#e0261b 38%,transparent 72%),var(--lt)}
+.sq.tgt::before{content:"";position:absolute;width:30%;height:30%;border-radius:50%;background:rgba(20,20,20,.28);z-index:3}
+.sq.cap::before{content:"";position:absolute;inset:5%;border-radius:50%;border:5px solid rgba(20,20,20,.28);z-index:3}
+.pc,.ghost{font-family:"DejaVu Sans","Segoe UI Symbol","Noto Sans Symbols 2","Apple Symbols",serif;line-height:1;position:relative;z-index:2;pointer-events:none}
+.pc{font-size:10.4cqi}
+.pc.w,.ghost.w,.tool.w span,.promo .w{color:#fff;-webkit-text-stroke:1.6px #1c1c1c;paint-order:stroke fill;text-shadow:0 2px 2px rgba(0,0,0,.25)}
+.pc.b,.ghost.b,.tool.b span,.promo .b{color:#141414;text-shadow:0 1px 1px rgba(255,255,255,.25)}
+.pc.lift{opacity:.25}
+.rk,.fl{position:absolute;font:600 clamp(9px,2.1cqi,13px)/1 Barlow,sans-serif;z-index:1;pointer-events:none}
+.rk{top:4%;left:5%}.fl{bottom:4%;right:6%}
+.lt .rk,.lt .fl{color:var(--dk)}.dk .rk,.dk .fl{color:var(--lt)}
+.ghost{position:fixed;left:0;top:0;z-index:50;transform:translate(-50%,-55%);filter:drop-shadow(0 8px 10px rgba(0,0,0,.35))}
+.promo{position:absolute;inset:0;z-index:20;display:grid;place-items:center;background:rgba(10,10,10,.5);border-radius:6px}
+.promo[hidden]{display:none}
+.promo .box{background:var(--bg);border-radius:10px;padding:16px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.promo .row{display:flex;gap:8px;margin:10px 0}
+.promo button.pp{width:clamp(52px,14cqi,76px);aspect-ratio:1;border:1px solid var(--line);border-radius:8px;background:var(--lt);font-size:clamp(36px,10cqi,58px);cursor:pointer;font-family:"DejaVu Sans","Segoe UI Symbol","Noto Sans Symbols 2",serif;line-height:1}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.panel+.panel{margin-top:14px}
+.status{font:700 24px/1.15 "Barlow Condensed",sans-serif;margin:0 0 4px}
+.status .dot{display:inline-block;width:.72em;height:.72em;border-radius:50%;border:2px solid #1c1c1c;vertical-align:-.04em;margin-right:8px}
+.small{color:var(--mute);font-size:14px;margin:0}
+.lbl{font-weight:600;font-size:15px;margin:16px 0 8px}
+.palette{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.tool{aspect-ratio:1;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--lt);cursor:pointer;display:grid;place-items:center;padding:0;font-size:clamp(26px,3vw,34px);font-family:"DejaVu Sans","Segoe UI Symbol","Noto Sans Symbols 2",serif;line-height:1;color:var(--ink)}
+.tool.x{background:var(--field);font:600 13px Barlow,sans-serif}
+.tool[aria-pressed=true]{outline:3px solid var(--acc);outline-offset:1px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--field)}
+.seg button{border:0;background:none;color:var(--ink);font:600 15px Barlow,sans-serif;padding:0 16px;min-height:44px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.btn{min-height:44px;padding:0 16px;border-radius:8px;border:1px solid var(--line);background:var(--field);color:var(--ink);font:600 15px Barlow,sans-serif;cursor:pointer}
+.btn:hover{border-color:var(--mute)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--accInk)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.armed{background:var(--bad);border-color:var(--bad);color:#fff}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.checks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;font-size:15px}
+.checks label{display:flex;gap:8px;align-items:center;min-height:32px}
+.checks input{width:18px;height:18px;accent-color:var(--acc)}
+.checks label:has(input:disabled){color:var(--mute)}
+input[type=text],textarea{width:100%;font:16px Barlow,sans-serif;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.fenrow{display:flex;gap:8px}.fenrow input{flex:1;font-size:14px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.msg{color:var(--bad);font-weight:600;font-size:15px;margin:10px 0 0;min-height:0}
+.msg:empty{display:none}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:16px;text-align:center;background:var(--field)}
+.drop.over{border-color:var(--acc);background:light-dark(#f1f4ff,#1b2036)}
+#pic{display:block;max-width:100%;max-height:340px;margin:0 auto;border-radius:6px;border:1px solid var(--line)}
+#picNote.ok{color:var(--ink);font-weight:600}.msg .btns{font-weight:600}
+.sheet{margin-top:clamp(24px,3vw,40px);display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:clamp(20px,3vw,40px);align-items:start}
+@media(max-width:880px){.sheet{grid-template-columns:minmax(0,1fr)}}
+.sheethead{display:flex;flex-wrap:wrap;gap:10px;align-items:end;justify-content:space-between;margin-bottom:10px}
+table{width:100%;border-collapse:collapse;font-size:16px}
+th{text-align:left;font-weight:600;color:var(--mute);font-size:14px;border-bottom:2px solid var(--ink);padding:6px 8px}
+td{border-bottom:1px solid var(--line);padding:4px 8px;vertical-align:middle}
+td.num{width:3.6em;color:var(--mute);white-space:nowrap;font-variant-numeric:tabular-nums}
+td.mv{width:6.5em;font-weight:600;white-space:nowrap;font-size:17px}
+td.mv .side{display:inline-block;width:10px;height:10px;border-radius:50%;border:1.5px solid #1c1c1c;margin-right:8px;vertical-align:1px}
+td input{border:1px solid transparent;background:transparent;padding:8px;font-size:16px}
+td input:hover{border-color:var(--line)}td input:focus{background:var(--field);border-color:var(--acc)}
+tr.cur td{background:light-dark(#f1f4ff,#1b2036)}
+.empty{color:var(--mute);padding:18px 8px;border-bottom:1px solid var(--line)}
+textarea{min-height:220px;resize:vertical;font:14px/1.5 ui-monospace,Menlo,Consolas,monospace}
+.note{font-size:13px;color:var(--mute);margin:8px 0 0}
+@media(max-width:600px){table{font-size:15px}td.mv{width:5.2em}td.num{width:3em}}
+.nw{white-space:nowrap}
+.sq.pan{touch-action:manipulation}
+@media(max-width:600px){
+  .band{padding:14px 12px 28px}
+  h1{font-size:26px}h2{font-size:22px}
+  .lede{font-size:15px;margin-top:4px}
+  .top{margin-top:12px;gap:14px}
+  .boardwrap{margin-inline:-4px;width:calc(100% + 8px);border-radius:4px}
+  .panel{padding:14px;border-radius:8px}
+  .panel+.panel{margin-top:10px}
+  .status{font-size:20px}
+  .palette{gap:4px}
+  .tool{min-height:40px;font-size:26px;border-radius:6px}
+  .seg{display:flex;width:100%}.seg button{flex:1;padding:0 8px;font-size:14px}
+  .checks{grid-template-columns:minmax(0,1fr)}
+  .fenrow input{font-size:16px}
+  .solvebtns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .solvebtns .btn{padding:0 8px}
+  .btns .btn.pri{flex:1}
+  .sheet{margin-top:22px;gap:22px}
+  .sheethead{flex-direction:column;align-items:stretch;gap:8px}
+  .sheethead label{max-width:none!important}
+  textarea{min-height:150px;font-size:13px}
+  #pic{max-height:260px}
+  .drop{padding:12px}
+  .promo .box{padding:12px}
+}
+@media(prefers-reduced-motion:no-preference){.sq.last::after,.sq.sel::after{transition:opacity .15s}}
+</style>
+</head>
+<body>
+<main class="band">
+  <h1>Chess puzzle board</h1>
+  <p class="lede">Set up a position or load it from a picture, play out your solution, comment on each move, then copy the moves to send for checking.</p>
+
+  <div class="top">
+    <div class="boardwrap">
+      <div id="board" class="board" role="grid" aria-label="Chess board"></div>
+      <div id="promo" class="promo" hidden>
+        <div class="box"><strong>Promote to</strong><div class="row" id="promoRow"></div><button class="btn" id="promoCancel" type="button">Cancel</button></div>
+      </div>
+    </div>
+
+    <div>
+      <section class="panel">
+        <p class="status" id="status"></p>
+        <p class="small" id="substatus"></p>
+        <p class="msg" id="msg" role="alert"></p>
+      </section>
+
+      <section class="panel" id="setupPanel">
+        <h2>Set up the position</h2>
+        <p class="small">Pick a piece, then tap squares to place it. Tap the same piece again to remove it. Drag pieces to move them, or drag them off the board to delete.</p>
+        <div class="lbl">Pieces</div>
+        <div class="palette" id="palette"></div>
+        <div class="lbl">Who moves first</div>
+        <div class="seg" id="turnSeg"><button type="button" data-t="w">White to move</button><button type="button" data-t="b">Black to move</button></div>
+        <div class="lbl">Which side is at the bottom</div>
+        <div class="seg" id="bottomSeg"><button type="button" data-b="w">White at the bottom</button><button type="button" data-b="b">Black at the bottom</button></div>
+        <p class="small" style="margin-top:6px">The side at the bottom always plays up the board, so its pawns move upwards. Switching keeps the pieces where you placed them.</p>
+        <div class="lbl">From a picture</div>
+        <div id="drop" class="drop">
+          <p style="margin:0"><strong>Paste a puzzle picture</strong> (Ctrl+V / ⌘V) or drop it here</p>
+          <p class="small" style="margin:4px 0 10px">A WhatsApp screenshot works well. On a phone, save the picture first, then choose it.</p>
+          <button class="btn" type="button" id="bFile">Choose a picture</button>
+          <input type="file" id="file" accept="image/*" hidden>
+        </div>
+        <div id="picWrap" hidden>
+          <img id="pic" alt="Your puzzle picture">
+          <div class="btns"><button class="btn pri" type="button" id="bRead">Set up from picture</button><button class="btn" type="button" id="bAsk" hidden>Ask Claude to read it</button><button class="btn" type="button" id="bPicX">Remove picture</button></div>
+          <p class="small" id="picNote" style="margin-top:8px"></p>
+        </div>
+        <div class="lbl">Castling still allowed</div>
+        <div class="checks" id="castle">
+          <label><input type="checkbox" data-c="K"> White short <span class="nw">(O-O)</span></label>
+          <label><input type="checkbox" data-c="Q"> White long <span class="nw">(O-O-O)</span></label>
+          <label><input type="checkbox" data-c="k"> Black short <span class="nw">(O-O)</span></label>
+          <label><input type="checkbox" data-c="q"> Black long <span class="nw">(O-O-O)</span></label>
+        </div>
+        <div class="btns">
+          <button class="btn" type="button" id="bStart">Starting position</button>
+          <button class="btn" type="button" id="bClear">Clear board</button>
+        </div>
+        <div class="lbl">Or paste a FEN</div>
+        <div class="fenrow"><input type="text" id="fen" aria-label="FEN" spellcheck="false" autocomplete="off"><button class="btn" type="button" id="bFen">Load</button></div>
+        <div class="btns"><button class="btn pri" type="button" id="bSolve">Start solving</button></div>
+      </section>
+
+      <section class="panel" id="solvePanel" hidden>
+        <h2>Solve</h2>
+        <p class="small">Drag a piece, or tap it and then tap a highlighted square. Only legal moves are allowed.</p>
+        <div class="btns solvebtns">
+          <button class="btn" type="button" id="bUndo">Undo move</button>
+          <button class="btn" type="button" id="bRestart">Restart puzzle</button>
+          <button class="btn" type="button" id="bEdit">Edit position</button>
+          <button class="btn" type="button" data-flip>Flip board</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="sheet">
+    <section>
+      <div class="sheethead">
+        <h2>Scoresheet</h2>
+        <label style="flex:1;max-width:340px"><span class="small">Puzzle name</span><input type="text" id="title" placeholder="e.g. Mate in 2"></label>
+      </div>
+      <table>
+        <thead><tr><th>No.</th><th>Move</th><th>Comment</th></tr></thead>
+        <tbody id="moves"></tbody>
+      </table>
+    </section>
+    <section>
+      <div class="sheethead">
+        <h2>Copy to send</h2>
+        <div class="seg" id="fmtSeg"><button type="button" data-f="text">Plain text</button><button type="button" data-f="pgn">PGN</button></div>
+      </div>
+      <textarea id="out" readonly aria-label="Moves to copy"></textarea>
+      <div class="btns"><button class="btn pri" type="button" id="bCopy">Copy moves</button></div>
+      <p class="note">Plain text reads well in a message. PGN opens in chess apps such as Lichess or ChessBase, with your comments and the starting position included.</p>
+    </section>
+  </div>
+</main>
+
+<script>
+{
+const FILES='abcdefgh';
+const GLYPH={k:'\u265A',q:'\u265B',r:'\u265C',b:'\u265D',n:'\u265E',p:'\u265F\uFE0E'};
+const PNAME={k:'king',q:'queen',r:'rook',b:'bishop',n:'knight',p:'pawn'};
+const START='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+const SAMPLE='2r3k1/p4ppp/8/8/8/8/P2R1PPP/3R2K1 w - - 0 1';
+const KN=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
+const ORTH=[[1,0],[-1,0],[0,1],[0,-1]],DIAG=[[1,1],[1,-1],[-1,1],[-1,-1]],KD=ORTH.concat(DIAG);
+const color=p=>p?(p===p.toUpperCase()?'w':'b'):null;
+const opp=c=>c==='w'?'b':'w';
+const sqName=s=>FILES[s&7]+(8-(s>>3));
+const sqFrom=n=>{const f=FILES.indexOf(n[0]),r=8-(+n[1]);return f<0||!(r>=0&&r<8)?-1:r*8+f};
+const clone=p=>({...p,b:p.b.slice(),c:{...p.c}});
+const sideName=t=>t==='w'?'White':'Black';
+
+/* ---------- rules ---------- */
+function attacked(b,sq,by){
+  const r=sq>>3,f=sq&7,up=by==='w';
+  const P=up?'P':'p',N=up?'N':'n',K=up?'K':'k',R=up?'R':'r',B=up?'B':'b',Q=up?'Q':'q';
+  const pr=up?r+1:r-1;
+  for(const df of[-1,1]){const ff=f+df;if(pr>=0&&pr<8&&ff>=0&&ff<8&&b[pr*8+ff]===P)return true}
+  for(const[dr,df]of KN){const rr=r+dr,ff=f+df;if(rr>=0&&rr<8&&ff>=0&&ff<8&&b[rr*8+ff]===N)return true}
+  for(const[dr,df]of KD){const rr=r+dr,ff=f+df;if(rr>=0&&rr<8&&ff>=0&&ff<8&&b[rr*8+ff]===K)return true}
+  for(const[dirs,A]of[[ORTH,R],[DIAG,B]])for(const[dr,df]of dirs){
+    let rr=r+dr,ff=f+df;
+    while(rr>=0&&rr<8&&ff>=0&&ff<8){const p=b[rr*8+ff];if(p){if(p===A||p===Q)return true;break}rr+=dr;ff+=df}
+  }
+  return false;
+}
+const kingSq=(b,c)=>b.indexOf(c==='w'?'K':'k');
+function inCheck(pos,c){const k=kingSq(pos.b,c);return k>=0&&attacked(pos.b,k,opp(c))}
+function pseudo(pos){
+  const b=pos.b,t=pos.t,ms=[];
+  for(let s=0;s<64;s++){
+    const p=b[s];if(!p||color(p)!==t)continue;
+    const r=s>>3,f=s&7,k=p.toLowerCase();
+    const add=(to,x)=>ms.push({from:s,to,...x});
+    if(k==='p'){
+      const d=t==='w'?-1:1,home=t==='w'?6:1,last=t==='w'?0:7,r1=r+d;
+      const pp=(to,x)=>{if((to>>3)===last)for(const q of'qrbn')add(to,{...x,promo:q});else add(to,x)};
+      if(r1<0||r1>7)continue;
+      if(!b[r1*8+f]){pp(r1*8+f);if(r===home&&!b[(r+2*d)*8+f])add((r+2*d)*8+f,{dbl:1})}
+      for(const df of[-1,1]){const ff=f+df;if(ff<0||ff>7)continue;const to=r1*8+ff;
+        if(b[to]&&color(b[to])!==t)pp(to);else if(to===pos.ep&&!b[to])add(to,{ep:1})}
+    }else if(k==='n'||k==='k'){
+      for(const[dr,df]of(k==='n'?KN:KD)){const rr=r+dr,ff=f+df;if(rr<0||rr>7||ff<0||ff>7)continue;const to=rr*8+ff;if(!b[to]||color(b[to])!==t)add(to)}
+      if(k==='k'){
+        const home=t==='w'?60:4,o=opp(t),R=t==='w'?'R':'r',KS=t==='w'?'K':'k',QS=t==='w'?'Q':'q';
+        if(s===home&&!attacked(b,home,o)){
+          if(pos.c[KS]&&!b[home+1]&&!b[home+2]&&b[home+3]===R&&!attacked(b,home+1,o)&&!attacked(b,home+2,o))add(home+2,{castle:'K'});
+          if(pos.c[QS]&&!b[home-1]&&!b[home-2]&&!b[home-3]&&b[home-4]===R&&!attacked(b,home-1,o)&&!attacked(b,home-2,o))add(home-2,{castle:'Q'});
+        }
+      }
+    }else{
+      for(const[dr,df]of(k==='r'?ORTH:k==='b'?DIAG:KD)){
+        let rr=r+dr,ff=f+df;
+        while(rr>=0&&rr<8&&ff>=0&&ff<8){const to=rr*8+ff;if(!b[to])add(to);else{if(color(b[to])!==t)add(to);break}rr+=dr;ff+=df}
+      }
+    }
+  }
+  return ms;
+}
+function make(pos,m){
+  const n=clone(pos),b=n.b,p=b[m.from],k=p.toLowerCase(),t=pos.t,cap=b[m.to]||m.ep;
+  b[m.to]=m.promo?(t==='w'?m.promo.toUpperCase():m.promo):p;b[m.from]='';
+  if(m.ep)b[m.to+(t==='w'?8:-8)]='';
+  if(m.castle==='K'){b[m.from+1]=b[m.from+3];b[m.from+3]=''}
+  if(m.castle==='Q'){b[m.from-1]=b[m.from-4];b[m.from-4]=''}
+  n.ep=m.dbl?(m.from+m.to)/2:-1;
+  if(k==='k'){if(t==='w')n.c.K=n.c.Q=false;else n.c.k=n.c.q=false}
+  for(const[s,r]of[[63,'K'],[56,'Q'],[7,'k'],[0,'q']])if(m.from===s||m.to===s)n.c[r]=false;
+  n.h=(k==='p'||cap)?0:pos.h+1;
+  if(t==='b')n.n=pos.n+1;
+  n.t=opp(t);
+  return n;
+}
+function legal(pos){return pseudo(pos).filter(m=>{const n=make(pos,m);const k=kingSq(n.b,pos.t);return k<0||!attacked(n.b,k,n.t)})}
+function san(pos,m,all){
+  const p=pos.b[m.from],k=p.toLowerCase();let s;
+  if(m.castle)s=m.castle==='K'?'O-O':'O-O-O';
+  else{
+    const cap=pos.b[m.to]||m.ep,to=sqName(m.to);
+    if(k==='p')s=(cap?FILES[m.from&7]+'x':'')+to+(m.promo?'='+m.promo.toUpperCase():'');
+    else{
+      const others=all.filter(o=>o.to===m.to&&o.from!==m.from&&pos.b[o.from]===p);let dis='';
+      if(others.length){
+        if(!others.some(o=>(o.from&7)===(m.from&7)))dis=FILES[m.from&7];
+        else if(!others.some(o=>(o.from>>3)===(m.from>>3)))dis=sqName(m.from)[1];
+        else dis=sqName(m.from);
+      }
+      s=k.toUpperCase()+dis+(cap?'x':'')+to;
+    }
+  }
+  const n=make(pos,m);
+  if(inCheck(n,n.t))s+=legal(n).length?'+':'#';
+  return s;
+}
+function toFEN(pos){
+  const rows=[];
+  for(let r=0;r<8;r++){let row='',e=0;for(let f=0;f<8;f++){const p=pos.b[r*8+f];if(!p)e++;else{if(e){row+=e;e=0}row+=p}}if(e)row+=e;rows.push(row)}
+  const c=(pos.c.K?'K':'')+(pos.c.Q?'Q':'')+(pos.c.k?'k':'')+(pos.c.q?'q':'')||'-';
+  return rows.join('/')+' '+pos.t+' '+c+' '+(pos.ep>=0?sqName(pos.ep):'-')+' '+pos.h+' '+pos.n;
+}
+function fromFEN(str){
+  const parts=str.trim().split(/\s+/),rows=(parts[0]||'').split('/');
+  if(rows.length!==8)throw new Error('A FEN needs 8 ranks separated by "/".');
+  const b=[];
+  for(const row of rows){let n=0;for(const ch of row){
+    if(/[1-8]/.test(ch)){for(let i=0;i<+ch;i++)b.push('');n+=+ch}
+    else if(/[prnbqk]/i.test(ch)){b.push(ch);n++}
+    else throw new Error('Unexpected character "'+ch+'" in FEN.')}
+    if(n!==8)throw new Error('Each rank in the FEN must add up to 8 squares.')}
+  const cs=parts[2]||'-';
+  return{b,t:parts[1]==='b'?'b':'w',c:{K:cs.includes('K'),Q:cs.includes('Q'),k:cs.includes('k'),q:cs.includes('q')},
+    ep:parts[3]&&parts[3]!=='-'?sqFrom(parts[3]):-1,h:+parts[4]||0,n:Math.max(1,+parts[5]||1)};
+}
+
+/* ---------- state ---------- */
+const $=id=>document.getElementById(id);
+let okOrient=false,lastRead=null;let mode='setup',setup=fromFEN(SAMPLE),tool='Q',flip=false,hist=[],moves=[],sel=-1,fmt='text',title='';
+let LC=null;
+const cur=()=>hist[hist.length-1];
+const legalNow=()=>LC||(LC=legal(cur()));
+
+function save(){try{localStorage.setItem('chess-puzzle-board-v1',JSON.stringify({mode,setup:toFEN(setup),flip,fmt,title,moves:moves.map(m=>({from:m.from,to:m.to,promo:m.promo||'',comment:m.comment}))}))}catch(e){}}
+function load(){
+  try{
+    const d=JSON.parse(localStorage.getItem('chess-puzzle-board-v1')||'null');if(!d)return;
+    setup=fromFEN(d.setup);flip=!!d.flip;fmt=d.fmt==='pgn'?'pgn':'text';title=d.title&&!/^Sample:/.test(d.title)?d.title:'';
+    if(d.mode==='solve'){beginSolve(true);for(const m of d.moves||[]){
+      const mv=legalNow().find(x=>x.from===m.from&&x.to===m.to&&(x.promo||'')===(m.promo||''));if(!mv)break;push(mv,true);moves[moves.length-1].comment=m.comment||''}}
+  }catch(e){mode='setup'}
+}
+
+/* ---------- board ---------- */
+const boardEl=$('board'),sqEls=[];
+for(let i=0;i<64;i++){
+  const el=document.createElement('button');el.type='button';el.className='sq';
+  el.innerHTML='<span class="rk"></span><span class="fl"></span><span class="pc"></span>';
+  boardEl.appendChild(el);sqEls.push(el);
+}
+function renderBoard(){
+  const pos=mode==='setup'?setup:cur();
+  const tg=mode==='solve'&&sel>=0?legalNow().filter(m=>m.from===sel).map(m=>m.to):[];
+  const lm=mode==='solve'&&moves.length?moves[moves.length-1]:null;
+  const chk=mode==='solve'&&inCheck(pos,pos.t)?kingSq(pos.b,pos.t):-1;
+  for(let i=0;i<64;i++){
+    const el=sqEls[i],sq=flip?63-i:i,p=pos.b[sq];
+    el.dataset.sq=sq;
+    el.className='sq '+(((sq>>3)+(sq&7))%2?'dk':'lt')+(sq===sel?' sel':'')+(tg.includes(sq)?(p?' cap':' tgt'):'')+(lm&&(lm.from===sq||lm.to===sq)?' last':'')+(sq===chk?' chk':'');
+    const pc=el.children[2];pc.textContent=p?GLYPH[p.toLowerCase()]:'';pc.className='pc'+(p?' '+color(p):'');
+    el.children[0].textContent=i%8===0?8-(sq>>3):'';
+    el.children[1].textContent=i>=56?FILES[sq&7]:'';
+    el.classList.toggle('pan',!canDrag(sq));
+    el.setAttribute('aria-label',sqName(sq)+(p?', '+sideName(color(p)).toLowerCase()+' '+PNAME[p.toLowerCase()]:', empty'));
+  }
+}
+
+/* ---------- pointer: tap & drag ---------- */
+let down=null,ghost=null;
+const sqAt=(x,y)=>{const el=document.elementFromPoint(x,y);const s=el&&el.closest&&el.closest('.sq');return s?+s.dataset.sq:-1};
+function canDrag(sq){
+  const pos=mode==='setup'?setup:cur(),p=pos.b[sq];if(!p)return false;
+  return mode==='setup'||(color(p)===pos.t&&legalNow().some(m=>m.from===sq));
+}
+boardEl.addEventListener('pointerdown',e=>{
+  const s=e.target.closest('.sq');if(!s||e.button>0||!$('promo').hidden)return;
+  const sq=+s.dataset.sq;down={sq,x:e.clientX,y:e.clientY,drag:false,fresh:false,id:e.pointerId};
+  if(mode==='solve'){
+    const isTarget=sel>=0&&legalNow().some(m=>m.from===sel&&m.to===sq);
+    if(!isTarget&&canDrag(sq)&&sel!==sq){sel=sq;down.fresh=true;renderBoard()}
+  }
+  try{boardEl.setPointerCapture(e.pointerId)}catch(_){}
+});
+boardEl.addEventListener('pointermove',e=>{
+  if(!down||down.id!==e.pointerId)return;
+  if(!down.drag){
+    if(Math.hypot(e.clientX-down.x,e.clientY-down.y)<6||!canDrag(down.sq))return;
+    down.drag=true;
+    const pos=mode==='setup'?setup:cur(),p=pos.b[down.sq];
+    ghost=document.createElement('div');ghost.className='ghost '+color(p);ghost.textContent=GLYPH[p.toLowerCase()];
+    ghost.style.fontSize=(sqEls[0].clientWidth*.86)+'px';document.body.appendChild(ghost);
+    sqEls[flip?63-down.sq:down.sq].children[2].classList.add('lift');
+  }
+  ghost.style.left=e.clientX+'px';ghost.style.top=e.clientY+'px';
+});
+function endPointer(e,cancel){
+  if(!down||down.id!==e.pointerId)return;
+  const d=down;down=null;
+  if(ghost){ghost.remove();ghost=null}
+  if(cancel){renderBoard();return}
+  if(d.drag){
+    const to=sqAt(e.clientX,e.clientY);
+    if(mode==='setup'){if(to!==d.sq){if(to>=0)setup.b[to]=setup.b[d.sq];setup.b[d.sq]='';setupChanged()}else renderBoard()}
+    else{if(to>=0&&to!==d.sq&&legalNow().some(m=>m.from===d.sq&&m.to===to))tryMove(d.sq,to);else renderBoard()}
+  }else tap(d.sq,d.fresh);
+}
+boardEl.addEventListener('pointerup',e=>endPointer(e,false));
+boardEl.addEventListener('pointercancel',e=>endPointer(e,true));
+boardEl.addEventListener('click',e=>{if(e.detail!==0)return;const s=e.target.closest('.sq');if(s)tap(+s.dataset.sq,false)});
+
+function tap(sq,fresh){
+  if(mode==='setup'){
+    const old=setup.b[sq];
+    if(tool==='x')setup.b[sq]='';else setup.b[sq]=old===tool?'':tool;
+    if(lastRead&&tool!=='x'&&old!==tool&&old&&lastRead.v[sq]===old&&lastRead.g[sq]>=0){
+      const gid=lastRead.g[sq];
+      for(let i=0;i<64;i++)if(i!==sq&&lastRead.g[i]===gid&&setup.b[i]===lastRead.v[i]&&setup.b[i]===old){setup.b[i]=tool;lastRead.v[i]=tool}
+      lastRead.v[sq]=tool;
+    }
+    setupChanged();return;
+  }
+  const pos=cur();
+  if(sel>=0&&legalNow().some(m=>m.from===sel&&m.to===sq)){tryMove(sel,sq);return}
+  if(sq===sel&&!fresh)sel=-1;
+  else if(pos.b[sq]&&color(pos.b[sq])===pos.t&&legalNow().some(m=>m.from===sq))sel=sq;
+  else sel=-1;
+  renderBoard();
+}
+
+/* ---------- moves ---------- */
+function tryMove(from,to){
+  const c=legalNow().filter(m=>m.from===from&&m.to===to);if(!c.length)return;
+  if(c.length===1){push(c[0]);return}
+  const t=cur().t,row=$('promoRow');
+  row.innerHTML='qrbn'.split('').map(q=>`<button type="button" class="pp" data-q="${q}" aria-label="${PNAME[q]}"><span class="${t}">${GLYPH[q]}</span></button>`).join('');
+  $('promo').hidden=false;row.querySelector('button').focus();
+  row.onclick=e=>{const b=e.target.closest('[data-q]');if(!b)return;$('promo').hidden=true;push(c.find(m=>m.promo===b.dataset.q))};
+}
+$('promoCancel').onclick=()=>{$('promo').hidden=true;sel=-1;renderBoard()};
+function push(m,quiet){
+  const pos=cur(),s=san(pos,m,legalNow());
+  hist.push(make(pos,m));LC=null;
+  moves.push({san:s,from:m.from,to:m.to,promo:m.promo||'',comment:''});
+  sel=-1;
+  if(!quiet){renderAll();save();const inp=$('moves').querySelector('tr:last-child input');if(inp&&matchMedia('(hover:hover)').matches)inp.focus({preventScroll:true})}
+}
+function gameState(){
+  if(mode!=='solve')return null;
+  const pos=cur(),n=legalNow().length,chk=inCheck(pos,pos.t);
+  if(!n)return chk?{over:true,txt:'Checkmate — '+sideName(opp(pos.t))+' wins',res:pos.t==='w'?'0-1':'1-0'}:{over:true,txt:'Stalemate — draw',res:'1/2-1/2'};
+  return{over:false,txt:sideName(pos.t)+' to move'+(chk?' — check!':''),res:'*'};
+}
+
+/* ---------- setup ---------- */
+const palette=$('palette');
+palette.innerHTML=['K','Q','R','B','N','P','x','k','q','r','b','n','p'].map(p=>p==='x'
+  ?`<button type="button" class="tool x" data-p="x" aria-label="Eraser" style="grid-row:span 2">Erase</button>`
+  :`<button type="button" class="tool ${color(p)}" data-p="${p}" aria-label="${sideName(color(p))} ${PNAME[p.toLowerCase()]}"><span>${GLYPH[p.toLowerCase()]}</span></button>`).join('');
+palette.querySelector('.x').style.gridColumn='7';palette.querySelector('.x').style.gridRow='1 / span 2';
+palette.onclick=e=>{const b=e.target.closest('[data-p]');if(b){tool=b.dataset.p;renderTools()}};
+function renderTools(){palette.querySelectorAll('[data-p]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.p===tool))}
+$('turnSeg').onclick=e=>{const b=e.target.closest('[data-t]');if(b){setup.t=b.dataset.t;setupChanged()}};
+$('castle').onchange=e=>{const c=e.target.dataset.c;if(c){setup.c[c]=e.target.checked;setupChanged()}};
+const CAST={K:[60,'K',63,'R'],Q:[60,'K',56,'R'],k:[4,'k',7,'r'],q:[4,'k',0,'r']};
+function syncCastle(){
+  for(const c in CAST){const[ks,K,rs,R]=CAST[c],ok=setup.b[ks]===K&&setup.b[rs]===R;
+    if(!ok)setup.c[c]=false;const inp=$('castle').querySelector(`[data-c="${c}"]`);inp.disabled=!ok;inp.checked=setup.c[c]}
+}
+function setupChanged(){okOrient=false;setup.ep=-1;syncCastle();$('msg').textContent='';renderAll();save()}
+$('bStart').onclick=()=>{lastRead=null;setup=fromFEN(START);setupChanged()};
+$('bClear').onclick=()=>{lastRead=null;setup=fromFEN('8/8/8/8/8/8/8/8 w - - 0 1');setup.t=$('turnSeg').querySelector('[aria-pressed=true]')?.dataset.t||'w';setupChanged()};
+$('bFen').onclick=()=>{lastRead=null;try{setup=fromFEN($('fen').value);syncCastle();renderAll();save();$('msg').textContent=''}catch(err){$('msg').textContent=err.message}};
+$('fen').addEventListener('keydown',e=>{if(e.key==='Enter')$('bFen').click()});
+document.querySelectorAll('[data-flip]').forEach(b=>b.onclick=()=>{flip=!flip;renderAll();save()});
+
+function validate(){
+  const b=setup.b,wk=b.filter(p=>p==='K').length,bk=b.filter(p=>p==='k').length;
+  if(wk!==1||bk!==1)return'Each side needs exactly one king (White has '+wk+', Black has '+bk+').';
+  for(let f=0;f<8;f++)if(/p/i.test(b[f])||/p/i.test(b[56+f]))return'Pawns can’t stand on the first or last rank.';
+  if(inCheck(setup,opp(setup.t)))return sideName(opp(setup.t))+' is in check, but it’s '+sideName(setup.t)+'’s turn. Change who moves first or fix the position.';
+  return'';
+}
+function beginSolve(quiet){
+  const err=validate();if(err){if(!quiet)$('msg').textContent=err;else throw new Error(err);return}
+  mode='solve';hist=[clone(setup)];moves=[];sel=-1;LC=null;
+  if(!quiet){renderAll();save();showBoard()}
+}
+$('bottomSeg').onclick=e=>{const b=e.target.closest('[data-b]');if(!b)return;const want=b.dataset.b==='b';if(want===flip)return;
+  setup.b.reverse();flip=want;lastRead=null;setup.c={K:true,Q:true,k:true,q:true};setupChanged()};
+function looksReversed(arr){
+  let s=0;(arr||setup.b).forEach((p,i)=>{const r=8-(i>>3);
+    if(p==='P')s+=r<=4?1:-1;else if(p==='p')s+=r>=5?1:-1;
+    else if(p==='K')s+=r<=2?1:r>=7?-2:0;else if(p==='k')s+=r>=7?1:r<=2?-2:0});
+  return s<0;
+}
+$('bSolve').onclick=()=>{
+  if(!okOrient&&looksReversed()){
+    const m=$('msg');
+    m.innerHTML=esc(`It looks like you set up the ${flip?'white':'black'} pieces at the bottom, but the board has ${flip?'Black':'White'} at the bottom, so the pawns would move the wrong way.`)+'<span class="btns"><button class="btn pri" type="button" id="fixO">'+esc(`Put ${flip?'White':'Black'} at the bottom`)+'</button><button class="btn" type="button" id="keepO">'+esc('Keep it as it is')+'</button></span>';
+    $('fixO').onclick=()=>{$('bottomSeg').querySelector('[data-b="'+(flip?'w':'b')+'"]').click();beginSolve(false)};
+    $('keepO').onclick=()=>{okOrient=true;beginSolve(false)};
+    return;
+  }
+  beginSolve(false);
+};
+
+function showBoard(){const r=$('board').getBoundingClientRect();if(r.top<0||r.bottom>innerHeight)$('board').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',block:'start'})}
+/* ---------- solve controls ---------- */
+$('bUndo').onclick=()=>{if(moves.length){hist.pop();moves.pop();LC=null;sel=-1;renderAll();save()}};
+function armed(btn,label,fn){
+  if(!moves.length||btn.classList.contains('armed')){btn.classList.remove('armed');btn.textContent=label;clearTimeout(btn._t);fn();return}
+  btn.classList.add('armed');btn.textContent='Clears all moves — tap again';
+  btn._t=setTimeout(()=>{btn.classList.remove('armed');btn.textContent=label},3000);
+}
+$('bRestart').onclick=e=>armed(e.currentTarget,'Restart puzzle',()=>{hist=[hist[0]];moves=[];LC=null;sel=-1;renderAll();save()});
+$('bEdit').onclick=e=>armed(e.currentTarget,'Edit position',()=>{setup=clone(hist[0]);mode='setup';moves=[];hist=[];sel=-1;syncCastle();renderAll();save()});
+
+/* ---------- scoresheet & export ---------- */
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const plyNum=i=>hist[i].t==='w'?hist[i].n+'.':hist[i].n+'…';
+function renderMoves(){
+  const tb=$('moves');
+  if(mode==='setup'){tb.innerHTML='<tr><td colspan="3" class="empty">Set up the position and press <strong>Start solving</strong>. Your moves will be listed here.</td></tr>';return}
+  if(!moves.length){tb.innerHTML=`<tr><td colspan="3" class="empty">No moves yet — make ${sideName(hist[0].t)}’s first move on the board.</td></tr>`;return}
+  tb.innerHTML=moves.map((m,i)=>`<tr${i===moves.length-1?' class="cur"':''}><td class="num">${plyNum(i)}</td><td class="mv"><span class="side" style="background:${hist[i].t==='w'?'#fff':'#141414'}"></span>${esc(m.san)}</td><td><input type="text" data-i="${i}" value="${esc(m.comment)}" placeholder="Add a comment" aria-label="Comment on ${plyNum(i)} ${esc(m.san)}"></td></tr>`).join('');
+}
+$('moves').addEventListener('input',e=>{const i=e.target.dataset.i;if(i!=null){moves[+i].comment=e.target.value;renderOut();save()}});
+$('title').addEventListener('input',e=>{title=e.target.value;renderOut();save()});
+$('fmtSeg').onclick=e=>{const b=e.target.closest('[data-f]');if(b){fmt=b.dataset.f;renderSeg();renderOut();save()}};
+function exportText(){
+  const start=mode==='solve'?hist[0]:setup,fen=toFEN(start),gs=gameState();
+  if(fmt==='pgn'){
+    const res=gs?gs.res:'*',out=[];let needNum=true;
+    moves.forEach((m,i)=>{const p=hist[i];if(p.t==='w')out.push(p.n+'.');else if(needNum)out.push(p.n+'...');
+      out.push(m.san);needNum=false;const c=m.comment.trim().replace(/[{}]/g,'');if(c){out.push('{'+c+'}');needNum=true}});
+    out.push(res);
+    let lines=[],line='';for(const w of out){if(line&&(line+' '+w).length>78){lines.push(line);line=w}else line=line?line+' '+w:w}lines.push(line);
+    return`[Event "${(title.trim()||'Chess puzzle').replace(/["\\]/g,"'")}"]\n[White "?"]\n[Black "?"]\n[Result "${res}"]\n[SetUp "1"]\n[FEN "${fen}"]\n\n`+lines.join('\n');
+  }
+  const L=[];
+  if(title.trim())L.push(title.trim());
+  L.push('Start: '+sideName(start.t)+' to move','FEN: '+fen,'');
+  if(!moves.length)L.push('(no moves yet)');
+  moves.forEach((m,i)=>{const c=m.comment.trim();L.push((plyNum(i)+' '+m.san).padEnd(14)+(c?' — '+c:''))});
+  if(gs&&gs.over)L.push('',gs.txt);
+  return L.join('\n');
+}
+function renderOut(){$('out').value=exportText();$('bCopy').disabled=mode!=='solve'}
+function renderSeg(){
+  $('fmtSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.f===fmt));
+  $('bottomSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',(b.dataset.b==='b')===flip));
+  $('turnSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===setup.t));
+}
+$('bCopy').onclick=async e=>{
+  const btn=e.currentTarget,txt=$('out').value;let ok=false;
+  try{await navigator.clipboard.writeText(txt);ok=true}catch(_){
+    const t=$('out');t.focus();t.select();try{ok=document.execCommand('copy')}catch(__){}}
+  btn.textContent=ok?'Copied':'Selected — press Ctrl+C / ⌘C';
+  setTimeout(()=>btn.textContent='Copy moves',1800);
+};
+
+/* ---------- status ---------- */
+function renderStatus(){
+  const st=$('status'),sub=$('substatus');
+  const dot=t=>`<span class="dot" style="background:${t==='w'?'#fff':'#141414'}"></span>`;
+  if(mode==='setup'){
+    st.innerHTML=dot(setup.t)+'Setting up — '+sideName(setup.t)+' moves first';
+    sub.textContent=setup.b.filter(Boolean).length+' pieces on the board'+' · '+sideName(flip?'b':'w')+' plays up the board';
+  }else{
+    const gs=gameState();st.innerHTML=(gs.over?'':dot(cur().t))+gs.txt;
+    sub.textContent=moves.length?moves.length+(moves.length===1?' move':' moves')+' played from the puzzle position':'Puzzle position — your move';
+  }
+  $('setupPanel').hidden=mode!=='setup';$('solvePanel').hidden=mode!=='solve';
+  $('bUndo').disabled=!moves.length;$('bRestart').disabled=!moves.length;
+  if(mode==='setup'&&document.activeElement!==$('fen'))$('fen').value=toFEN(setup);
+}
+function renderAll(){renderBoard();renderStatus();renderMoves();renderSeg();renderOut()}
+
+/* ---------- local picture reader ---------- */
+const BR=(()=>{
+  const lumOf=(d,j)=>0.299*d[j]+0.587*d[j+1]+0.114*d[j+2];
+  function canvasFrom(img,max){const k=Math.min(1,max/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height));
+    const w=Math.max(1,Math.round((img.naturalWidth||img.width)*k)),h=Math.max(1,Math.round((img.naturalHeight||img.height)*k));
+    const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d',{willReadFrequently:true});
+    g.fillStyle='#fff';g.fillRect(0,0,w,h);g.drawImage(img,0,0,w,h);return{w,h,d:g.getImageData(0,0,w,h).data}}
+  function integ(im){const{w,h,d}=im,W=w+1,I=new Float64Array(W*(h+1));
+    for(let y=0;y<h;y++){let row=0;for(let x=0;x<w;x++){row+=lumOf(d,(y*w+x)*4);I[(y+1)*W+x+1]=I[y*W+x+1]+row}}return I}
+  function score(I,w,x0,y0,s){
+    const W=w+1,c=s/8,ins=Math.max(1,Math.round(c*.07)),p=Math.max(1,Math.round(c*.13)),ar=p*p;
+    const rm=(x,y)=>(I[(y+p)*W+x+p]-I[y*W+x+p]-I[(y+p)*W+x]+I[y*W+x])/ar;
+    let sa=0,sa2=0,sb=0,sb2=0;
+    for(let r=0;r<8;r++)for(let f=0;f<8;f++){
+      const cx=x0+f*c,cy=y0+r*c,a=Math.round(cx+ins),b=Math.round(cx+c-ins-p),u=Math.round(cy+ins),v=Math.round(cy+c-ins-p);
+      const q=[rm(a,u),rm(b,u),rm(a,v),rm(b,v)].sort((m,n)=>m-n),val=(q[1]+q[2])/2;
+      if((r+f)&1){sb+=val;sb2+=val*val}else{sa+=val;sa2+=val*val}
+    }
+    const ma=sa/32,mb=sb/32,sda=Math.sqrt(Math.max(0,sa2/32-ma*ma)),sdb=Math.sqrt(Math.max(0,sb2/32-mb*mb)),con=Math.abs(ma-mb);
+    return con<8?-1e9:con-1.5*(sda+sdb);
+  }
+  function findBoard(img){
+    const co=canvasFrom(img,170),Ic=integ(co),m=Math.min(co.w,co.h);let best={sc:-1e9};
+    for(let s=m;s>=Math.floor(m*.3);s--)for(let y=0;y+s<=co.h;y+=2)for(let x=0;x+s<=co.w;x+=2){
+      const sc=score(Ic,co.w,x,y,s);if(sc>best.sc)best={sc,x,y,s}}
+    if(best.sc<5)return null;
+    const fi=canvasFrom(img,720),If=integ(fi),k=fi.w/co.w;let b2={sc:-1e9};
+    const X=Math.round(best.x*k),Y=Math.round(best.y*k),S=Math.round(best.s*k),R=Math.ceil(k*2)+2;
+    for(let s=S-R;s<=S+R;s++)for(let y=Y-R;y<=Y+R;y++)for(let x=X-R;x<=X+R;x++){
+      if(x<0||y<0||x+s>fi.w||y+s>fi.h||s<16)continue;const sc=score(If,fi.w,x,y,s);if(sc>b2.sc)b2={sc,x,y,s}}
+    return b2.sc>5?{im:fi,...b2}:null;
+  }
+  const G=32,N=20;
+  function largest(mask){const lab=new Int32Array(G*G);let best=0,bestN=0,id=0;
+    for(let i=0;i<G*G;i++){if(!mask[i]||lab[i])continue;id++;let n=0;const st=[i];lab[i]=id;
+      while(st.length){const j=st.pop();n++;const x=j%G,y=(j/G)|0;for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=G||yy>=G)continue;const k=yy*G+xx;if(mask[k]&&!lab[k]){lab[k]=id;st.push(k)}}}
+      if(n>bestN){bestN=n;best=id}}
+    const out=new Uint8Array(G*G);for(let i=0;i<G*G;i++)out[i]=lab[i]===best&&best?1:0;return out}
+  function fill(mask){const out=new Uint8Array(G*G).fill(1),seen=new Uint8Array(G*G),st=[];
+    for(let i=0;i<G;i++)for(const k of[i,(G-1)*G+i,i*G,i*G+G-1])if(!mask[k]&&!seen[k]){seen[k]=1;st.push(k)}
+    while(st.length){const j=st.pop();out[j]=0;const x=j%G,y=(j/G)|0;for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=G||yy>=G)continue;const k=yy*G+xx;if(!mask[k]&&!seen[k]){seen[k]=1;st.push(k)}}}
+    return out}
+  function norm(mask){let x0=G,y0=G,x1=-1,y1=-1;
+    for(let i=0;i<G*G;i++)if(mask[i]){const x=i%G,y=(i/G)|0;x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y)}
+    const bw=x1-x0+1,bh=y1-y0+1,sc=Math.max(bw,bh)/N,g=new Uint8Array(N*N),ox=(N-bw/sc)/2,oy=(N-bh/sc)/2;
+    for(let y=0;y<N;y++)for(let x=0;x<N;x++){const sx=Math.floor(x0+(x-ox+.5)*sc),sy=Math.floor(y0+(y-oy+.5)*sc);if(sx>=x0&&sx<=x1&&sy>=y0&&sy<=y1)g[y*N+x]=mask[sy*G+sx]}
+    return{g,bh,bw}}
+  const iou=(a,b,mir)=>{let i=0,u=0;for(let y=0;y<N;y++)for(let x=0;x<N;x++){const p=a[y*N+x],q=b[y*N+(mir?N-1-x:x)];if(p&&q)i++;if(p||q)u++}return u?i/u:0};
+  let TPL=null;
+  function templates(){if(TPL)return TPL;TPL=[];
+    const c=document.createElement('canvas');c.width=c.height=G*4;const g=c.getContext('2d',{willReadFrequently:true});
+    const fams=['"DejaVu Sans"','FreeSerif','"Segoe UI Symbol"','"Noto Sans Symbols 2"','"Noto Sans Symbols"','"Apple Symbols"','"Arial Unicode MS"','Symbola','"Lucida Sans Unicode"','"MS Gothic"','serif','sans-serif'];
+    const seen=[];
+    for(const fam of fams){const set={};
+      for(const t of'kqrbnp'){g.clearRect(0,0,G*4,G*4);g.font=`${G*3.2}px ${fam},"DejaVu Sans",serif`;g.textAlign='center';g.textBaseline='middle';g.fillStyle='#000';g.fillText({k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟︎'}[t],G*2,G*2);
+        const d=g.getImageData(0,0,G*4,G*4).data,m=new Uint8Array(G*G);
+        for(let y=0;y<G;y++)for(let x=0;x<G;x++){let a=0;for(let yy=0;yy<4;yy++)for(let xx=0;xx<4;xx++)a+=d[((y*4+yy)*G*4+x*4+xx)*4+3];m[y*G+x]=a/16>100?1:0}
+        set[t]=norm(fill(largest(m)))}
+      const key=Object.values(set).map(o=>o.g.join('')).join('|');if(seen.includes(key))continue;seen.push(key);
+      const kh=set.k.bh;for(const t in set)set[t].rel=set[t].bh/kh;TPL.push(set)}
+    // outlines of the chess.com piece set, so its screenshots are read reliably
+    const CC={"k":["1fc001fc001fc001fc01fff87fffe7fffeffffefffffffffffffff7fffe7fffe1fffc1fff80fff01fff81fffc1fffc1fffc",1.0],"q":["79c007fe007fe0739c6f3bcef3fdff3fdffbfff3fffe3fffc1fffc1fff80fff80fff00fff00fff81fff81fffc1fffc1fffc",1.036],"r":["f001ef781ef781fff81fff81fff01fff007fc00ffc00ffc00ffe00ffe00ffe01ffe01ffe01ffe03fff83fffc3fffc3fffc",0.964],"b":["f0000f0000f0001fc003fc003fe00fff00fff00fff80fff80fff80fff80fff007ff007ff00fff81fff83fffc3fffc3fffc",1.036],"n":["180001f0003f800fff00fff80fff81fff83fff83fffc3fffc3e7fc3effc01ffc03ff803ff80fffc0fffc1fffc1fffc0fffc",1.036],"p":["1f8003fc003fc003fc003fc003fc003fc003fc003fe003fe001f8003f8003fc003fc00fff81fffc3fffc3fffc3fffc3fffc",0.893]},cc={};
+    for(const t in CC){const h=CC[t][0].padStart(N*N/4,'0'),g=new Uint8Array(N*N);for(let i=0;i<h.length;i++){const v=parseInt(h[i],16);for(let k=0;k<4;k++)g[i*4+k]=(v>>(3-k))&1}cc[t]={g,rel:CC[t][1]}}
+    TPL.push(cc);
+    return TPL}
+  function read(img){
+    const B=findBoard(img);if(!B)return null;
+    const{im,x,y,s}=B,{w,d}=im,c=s/8,cells=[];
+    const px=(X,Y)=>{X=Math.min(w-1,Math.max(0,Math.round(X)));Y=Math.min(im.h-1,Math.max(0,Math.round(Y)));return(Y*w+X)*4};
+    const ins=c*.07,p=Math.max(1,Math.round(c*.13)),CR=[[ins,ins],[c-ins-p,ins],[ins,c-ins-p],[c-ins-p,c-ins-p]],bgs=[],noise=[];
+    for(let r=0;r<8;r++)for(let f=0;f<8;f++){
+      const cx=x+f*c,cy=y+r*c,bg=[[],[],[]];
+      for(const[ox,oy]of CR){const sum=[0,0,0];
+        for(let yy=0;yy<p;yy++)for(let xx=0;xx<p;xx++){const j=px(cx+ox+xx,cy+oy+yy);sum[0]+=d[j];sum[1]+=d[j+1];sum[2]+=d[j+2]}
+        for(let k=0;k<3;k++)bg[k].push(sum[k]/(p*p))}
+      const bc=bg.map(a=>{a.sort((m,n)=>m-n);return(a[1]+a[2])/2});
+      const ns=[];
+      for(const[ox,oy]of CR){let nz=0;for(let yy=0;yy<p;yy++)for(let xx=0;xx<p;xx++){const j=px(cx+ox+xx,cy+oy+yy);nz+=Math.max(Math.abs(d[j]-bc[0]),Math.abs(d[j+1]-bc[1]),Math.abs(d[j+2]-bc[2]))}ns.push(nz/(p*p))}
+      ns.sort((m,n)=>m-n);noise.push((ns[0]+ns[1])/2);bgs.push(bc);
+    }
+    const nsorted=noise.slice().sort((m,n)=>m-n),NZ=nsorted[32],TH=Math.min(45,Math.max(18,12+4*NZ));
+    for(let r=0;r<8;r++)for(let f=0;f<8;f++){
+      const cx=x+f*c,cy=y+r*c,bc=bgs[r*8+f];
+      const raw=new Uint8Array(G*G),lum=new Float32Array(G*G);
+      for(let yy=0;yy<G;yy++)for(let xx=0;xx<G;xx++){const j=px(cx+c*(.06+.88*(xx+.5)/G),cy+c*(.06+.88*(yy+.5)/G));
+        const df=Math.max(Math.abs(d[j]-bc[0]),Math.abs(d[j+1]-bc[1]),Math.abs(d[j+2]-bc[2]));raw[yy*G+xx]=df>TH?1:0;lum[yy*G+xx]=lumOf(d,j)}
+      const comp=largest(raw);let n=0;for(const v of comp)n+=v;
+      if(n<G*G*.04){cells.push(null);continue}
+      const sil=fill(comp);let sn=0,br=0,dk=0;for(let i=0;i<G*G;i++)if(sil[i]){sn++;if(lum[i]>165)br++;else if(lum[i]<90)dk++}
+      if(sn<G*G*.08){cells.push(null);continue}
+      cells.push({i:r*8+f,bf:(br-dk)/sn,...norm(sil)});
+    }
+    const T=templates(),occ=cells.filter(Boolean);
+    if(!occ.length)return{vis:Array(64).fill(''),sc:B.sc};
+    {const v=occ.map(o=>o.bf).sort((p,q)=>p-q);let th=-.4,gap=0;
+     for(let i=1;i<v.length;i++)if(v[i]-v[i-1]>gap){gap=v[i]-v[i-1];th=(v[i]+v[i-1])/2}
+     if(gap<=.15)th=-.4;for(const o of occ)o.col=o.bf>th?'w':'b'}
+    const maxH=Math.max(...occ.map(o=>o.bh));
+    for(const o of occ){o.rel=o.bh/maxH;o.dist={};for(const t of'kqrbnp')o.dist[t]=Math.min(...T.map(S=>(1-Math.max(iou(o.g,S[t].g),t==='n'?iou(o.g,S[t].g,1):0))+1.2*Math.abs(o.rel-S[t].rel)))}
+    // pieces drawn identically in one picture get the same answer
+    const grp=occ.map((_,i)=>i);const root=i=>grp[i]===i?i:(grp[i]=root(grp[i]));
+    for(let a=0;a<occ.length;a++)for(let b=a+1;b<occ.length;b++)
+      if(occ[a].col===occ[b].col&&Math.abs(occ[a].rel-occ[b].rel)<.05&&iou(occ[a].g,occ[b].g)>.9)grp[root(b)]=root(a);
+    const sums={};occ.forEach((o,i)=>{const g=root(i);sums[g]=sums[g]||{};for(const t in o.dist)sums[g][t]=(sums[g][t]||0)+o.dist[t]});
+    const order=o=>Object.keys(o.dist).sort((p,q)=>o.sum[p]-o.sum[q]);
+    occ.forEach((o,i)=>{o.sum=sums[root(i)];o.rank=order(o);o.t=o.rank[0]});
+    for(const o of occ){const row=(o.i>>3);if(o.t==='p'&&(row===0||row===7))o.t=o.rank.find(t=>t!=='p')}
+    for(const col of'wb'){
+      const mine=occ.filter(o=>o.col===col);if(!mine.length)continue;
+      let ks=mine.filter(o=>o.t==='k');
+      if(!ks.length){const k=mine.slice().sort((p,q)=>p.dist.k-q.dist.k)[0];k.t='k';ks=[k]}
+      if(ks.length>1){ks.sort((p,q)=>p.dist.k-q.dist.k);for(const o of ks.slice(1))o.t=o.rank.find(t=>t!=='k'&&!(t==='p'&&((o.i>>3)===0||(o.i>>3)===7)))}
+    }
+    const vis=Array(64).fill(''),gv=Array(64).fill(-1);occ.forEach((o,k)=>{vis[o.i]=o.col==='w'?o.t.toUpperCase():o.t;gv[o.i]=root(k)});
+    return{vis,grp:gv,sc:B.sc};
+  }
+  return{read};
+})();
+
+/* ---------- picture import ---------- */
+let picBlob=null,picURL='',sampler=null,reading=false;
+(async()=>{try{if(window.claude&&typeof claude.use==='function'){const sm=await claude.use('sample');if(sm){const lim=await sm.limits();if(lim&&lim.images)sampler=sm}}}catch(e){}renderPic()})();
+function renderPic(){
+  $('picWrap').hidden=!picBlob;$('drop').hidden=!!picBlob;$('bAsk').hidden=!sampler;
+  const n=$('picNote');
+  if(!picBlob)return;
+  if(!n.dataset.set){n.className='small';n.textContent='Press “Set up from picture” to place the pieces shown in the picture. Then compare the board with the picture before you start solving.'}
+}
+async function shrink(file){
+  const url=URL.createObjectURL(file),img=new Image();img.src=url;await img.decode();
+  const k=Math.min(1,1400/Math.max(img.naturalWidth,img.naturalHeight)),c=document.createElement('canvas');
+  c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);
+  const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(img,0,0,c.width,c.height);
+  URL.revokeObjectURL(url);
+  return await new Promise(r=>c.toBlob(r,'image/jpeg',0.92));
+}
+async function setPic(file){
+  if(!file||!/^image\//.test(file.type))return;
+  if(mode!=='setup'){$('msg').textContent='To use a new picture, press “Edit position” first.';return}
+  try{picBlob=await shrink(file)}catch(e){$('msg').textContent='That picture couldn’t be opened. Try a screenshot or a JPG/PNG file.';return}
+  if(picURL)URL.revokeObjectURL(picURL);picURL=URL.createObjectURL(picBlob);$('pic').src=picURL;
+  delete $('picNote').dataset.set;renderPic();
+}
+function parseReply(t){
+  const a=t.indexOf('{'),z=t.lastIndexOf('}');if(a<0||z<a)throw new Error('no answer');
+  const j=JSON.parse(t.slice(a,z+1));
+  const rows=(j.rows||[]).map(r=>String(r).replace(/\s/g,'').replace(/[1-8]/g,d=>'.'.repeat(+d)).replace(/[^.KQRBNPkqrbnp]/g,'.'));
+  if(rows.length!==8||rows.some(r=>r.length!==8))throw new Error('bad rows');
+  return{rows,bottom:j.bottom==='black'?'b':'w',toMove:j.toMove==='black'?'b':j.toMove==='white'?'w':null,low:j.confidence==='low'};
+}
+const READ_PROMPT=`Read the chess position in this picture. It may be a screenshot from a chat app or website, a book diagram, or a photo of a real board.
+Reply with ONLY a JSON object and no other text, in this form:
+{"rows":["........","........","........","........","........","........","........","........"],"bottom":"white","toMove":null,"confidence":"high"}
+rows: the 8 rows of squares exactly as they appear in the picture, from the TOP row of the picture to the BOTTOM row, each read from LEFT to RIGHT as seen. Use K Q R B N P for white pieces, k q r b n p for black pieces and . for an empty square. Every row has exactly 8 characters. Do not rotate or reorder anything: describe what you see.
+bottom: "white" or "black", whichever side's home rank is at the bottom of the picture. Use the coordinate labels if they are shown (rank 1 at the bottom means white; rank 8 at the bottom means black, and then the files read h to a from left to right). Without labels, judge from where the kings and pawns stand; pawns move away from their own side.
+toMove: "white" or "black" if the picture shows who is to move (text such as "White to move" or "Black to play", a coloured dot or arrow beside the board, a highlighted clock); otherwise null.
+confidence: "high", "medium" or "low".
+Go square by square and count the squares in each row carefully. White and black pieces can be hard to tell apart on dark squares, so look at each piece's fill colour.`;
+async function readPic(){
+  if(!sampler||!picBlob||reading)return;
+  reading=true;const btn=$('bAsk'),n=$('picNote');btn.disabled=true;btn.textContent='Asking Claude…';
+  n.className='small';n.dataset.set=1;n.textContent='Reading the position — this takes a few seconds.';
+  try{
+    let res,got=null;
+    for(let i=0;i<2&&!got;i++){res=await sampler(READ_PROMPT,{images:[picBlob],modelTier:'complex'});try{got=parseReply(res.text)}catch(e){}}
+    if(!got)throw{message:'The answer couldn’t be understood. Try again, or crop the picture to just the board.'};
+    applyVisual(got.rows.join('').split('').map(ch=>ch==='.'?'':ch),got.bottom,got.toMove,got.low?' This picture was hard to read, so check it carefully.':'');
+  }catch(e){
+    n.className='small';n.style.color='var(--bad)';
+    n.textContent=e&&e.code==='not_granted'?'Reading pictures wasn’t allowed. You can still place the pieces by hand.':e&&e.code==='rate_limited'?'Too many pictures in a short time. Wait a minute and try again.':(e&&e.message)||'The picture couldn’t be read.';
+    setTimeout(()=>{n.style.color=''},8000);
+  }finally{reading=false;btn.disabled=false;btn.textContent='Ask Claude to read it'}
+}
+function applyVisual(vis,bottom,toMove,extra,grp){
+  const blk=bottom==='b',b=Array(64).fill('');
+  vis.forEach((ch,i)=>{b[blk?63-i:i]=ch||''});
+  let lr=null;if(grp){lr={g:Array(64).fill(-1),v:b.slice()};grp.forEach((g,i)=>{lr.g[blk?63-i:i]=g})}
+  setup={b,t:toMove||bottom,c:{K:true,Q:true,k:true,q:true},ep:-1,h:0,n:1};flip=blk;
+  setupChanged();okOrient=true;lastRead=lr;
+  const n=$('picNote');n.dataset.set=1;n.className='small ok';
+  n.textContent='Done: '+sideName(bottom)+' at the bottom, '+sideName(setup.t)+' to move'+(toMove?'':' (a guess, so change “Who moves first” if needed)')+'. Compare every piece with the picture and tap any square that’s wrong.'+(extra||'')+(lr?' Correcting one piece also corrects the pieces that look identical to it.':'');
+}
+async function readLocal(){
+  if(!picBlob||reading)return;
+  reading=true;const btn=$('bRead'),n=$('picNote');btn.disabled=true;btn.textContent='Reading…';
+  n.dataset.set=1;n.className='small';n.style.color='';n.textContent='Reading the picture…';
+  await new Promise(r=>setTimeout(r,40));
+  try{
+    const img=$('pic');if(!img.complete||!img.naturalWidth)await img.decode();
+    const res=BR.read(img);
+    if(!res){n.style.color='var(--bad)';n.textContent='No chessboard was found in this picture. Try a screenshot cropped so the board fills most of it.';return}
+    if(!res.vis.some(Boolean)){n.style.color='var(--bad)';n.textContent='The board was found, but no pieces could be made out. Try a sharper or larger picture.';return}
+    applyVisual(res.vis,looksReversed(res.vis)?'b':'w',null,' Reading is automatic and can mistake one piece for another, especially queens and rooks.',res.grp);
+  }catch(e){n.style.color='var(--bad)';n.textContent='The picture couldn’t be read: '+(e&&e.message||e)}
+  finally{reading=false;btn.disabled=false;btn.textContent='Set up from picture'}
+}
+$('bRead').onclick=()=>readLocal();
+$('bAsk').onclick=()=>readPic();
+$('bPicX').onclick=()=>{picBlob=null;if(picURL)URL.revokeObjectURL(picURL);picURL='';$('pic').removeAttribute('src');renderPic()};
+$('bFile').onclick=()=>$('file').click();
+$('file').onchange=e=>{setPic(e.target.files[0]);e.target.value=''};
+document.addEventListener('paste',e=>{const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));if(!it)return;e.preventDefault();setPic(it.getAsFile())});
+const hasFiles=e=>[...(e.dataTransfer?.types||[])].includes('Files');
+document.addEventListener('dragover',e=>{if(hasFiles(e)){e.preventDefault();$('drop').classList.add('over')}});
+document.addEventListener('dragleave',e=>{if(!e.relatedTarget)$('drop').classList.remove('over')});
+document.addEventListener('drop',e=>{if(!hasFiles(e))return;e.preventDefault();$('drop').classList.remove('over');setPic(e.dataTransfer.files[0])});
+
+try{load()}catch(e){mode='setup'}
+$('title').value=title;
+syncCastle();renderTools();renderAll();
+}
+</script>
+</body>
+</html>
